@@ -4,49 +4,41 @@ languages:
 - csharp
 products:
 - azure
-services: virtual-network
-platforms: dotnet
-author: yaohaizh
+extensions:
+- services: virtual-network
+- platforms: dotnet
 ---
 
 # Manage network peering between two virtual networks #
 
-          Azure Network sample for enabling and updating network peering between two virtual networks
-         
-          Summary ...
-         
-          - This sample creates two virtual networks in the same subscription and then peers them, modifying various options on the peering.
-         
-          Details ...
-         
-          1. Create two virtual networks, network "A" and network "B"...
-          - network A with two subnets
-          - network B with one subnet
-          - the networks' address spaces must not overlap
-          - the networks must be in the same region
-         
-          2. Peer the networks...
-          - the peering will initially have default settings:
-            - each network's IP address spaces will be accessible from the other network
-            - no traffic forwarding will be enabled between the networks
-            - no gateway transit between one network and the other will be enabled
-         
-          3. Update the peering...
-          - disable IP address space between the networks
-          - enable traffic forwarding from network A to network B
-          
-          4. Delete the peering
-          - the removal of the peering takes place on both networks, as long as they are in the same subscription
-         
-          Notes: 
-          - Once a peering is created, it cannot be pointed at another remote network later.
-          - The address spaces of the peered networks cannot be changed as long as the networks are peered.
-          - Gateway transit scenarios as well as peering networks in different subscriptions are possible but beyond the scope of this sample.
-          - Network peering in reality results in pairs of peering objects: one pointing from one network to the other,
-            and the other peering object pointing the other way. For simplicity though, the SDK provides a unified way to
-            manage the peering as a whole, in a single command flow, without the need to duplicate commands for both sides of the peering,
-            while enforcing the required restrictions between the two peerings automatically, as this sample shows. But it is also possible
-            to modify each peering separately, which becomes required when working with networks in different subscriptions.
+ Azure Network sample for enabling and updating network peering between two virtual networks
+ Summary ...
+ - This sample creates two virtual networks in the same subscription and then peers them, modifying various options on the peering.
+ Details ...
+ 1. Create two virtual networks, network "A" and network "B"...
+ - network A with two subnets
+ - network B with one subnet
+ - the networks' address spaces must not overlap
+ - the networks must be in the same region
+ 2. Peer the networks...
+ - the peering will initially have default settings:
+   - each network's IP address spaces will be accessible from the other network
+   - no traffic forwarding will be enabled between the networks
+   - no gateway transit between one network and the other will be enabled
+ 3. Update the peering...
+ - disable IP address space between the networks
+ - enable traffic forwarding from network A to network B
+ 4. Delete the peering
+ - the removal of the peering takes place on both networks, as long as they are in the same subscription
+ Notes:
+ - Once a peering is created, it cannot be pointed at another remote network later.
+ - The address spaces of the peered networks cannot be changed as long as the networks are peered.
+ - Gateway transit scenarios as well as peering networks in different subscriptions are possible but beyond the scope of this sample.
+ - Network peering in reality results in pairs of peering objects: one pointing from one network to the other,
+   and the other peering object pointing the other way. For simplicity though, the SDK provides a unified way to
+   manage the peering as a whole, in a single command flow, without the need to duplicate commands for both sides of the peering,
+   while enforcing the required restrictions between the two peerings automatically, as this sample shows. But it is also possible
+   to modify each peering separately, which becomes required when working with networks in different subscriptions.
 
 
 ## Running this Sample ##
