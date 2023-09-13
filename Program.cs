@@ -1,21 +1,24 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License. See License.txt in the project root for license information.
 
-using Microsoft.Azure.Management.Compute.Fluent;
-using Microsoft.Azure.Management.Compute.Fluent.Models;
-using Microsoft.Azure.Management.Fluent;
-using Microsoft.Azure.Management.Network.Fluent;
-using Microsoft.Azure.Management.ResourceManager.Fluent;
-using Microsoft.Azure.Management.ResourceManager.Fluent.Core;
-using Microsoft.Azure.Management.Samples.Common;
-using Microsoft.Azure.Management.ResourceManager.Fluent.Core.ResourceActions;
-using System;
-using System.Linq;
+using Azure;
+using Azure.Core;
+using Azure.Identity;
+using Azure.ResourceManager.Resources.Models;
+using Azure.ResourceManager.Samples.Common;
+using Azure.ResourceManager.Resources;
+using Azure.ResourceManager;
+using Azure.ResourceManager.Network;
+using Azure.ResourceManager.Network.Models;
+using Azure.ResourceManager.Compute;
+using Azure.ResourceManager.Compute.Models;
+using System.Xml.Linq;
 
 namespace ManageNetworkPeeringInSameSubscription
 {
     public class Program
     {
+        private static ResourceIdentifier? _resourceGroupId = null;
 
         /**
          * Azure Network sample for enabling and updating network peering between two virtual networks
@@ -55,13 +58,11 @@ namespace ManageNetworkPeeringInSameSubscription
          *   while enforcing the required restrictions between the two peerings automatically, as this sample shows. But it is also possible
          *   to modify each peering separately, which becomes required when working with networks in different subscriptions.
          */
-        public static void RunSample(IAzure azure)
+        public static async Task RunSample(ArmClient client)
         {
-            Region region = Region.USEast;
-            string resourceGroupName = SdkContext.RandomResourceName("rg", 15);
-            string vnetAName = SdkContext.RandomResourceName("net", 15);
-            string vnetBName = SdkContext.RandomResourceName("net", 15);
-            string peeringABName = SdkContext.RandomResourceName("peer", 15);
+            string vnetAName = Utilities.CreateRandomName("vnet1-");
+            string vnetBName = Utilities.CreateRandomName("vnet2-");
+            string peeringABName = Utilities.CreateRandomName("peer");
 
             try
             {
@@ -146,8 +147,12 @@ namespace ManageNetworkPeeringInSameSubscription
             {
                 try
                 {
-                    Utilities.Log("Deleting Resource Group: " + resourceGroupName);
-                    azure.ResourceGroups.BeginDeleteByName(resourceGroupName);
+                    if (_resourceGroupId is not null)
+                    {
+                        Utilities.Log($"Deleting Resource Group...");
+                        await client.GetResourceGroupResource(_resourceGroupId).DeleteAsync(WaitUntil.Completed);
+                        Utilities.Log($"Deleted Resource Group: {_resourceGroupId.Name}");
+                    }
                 }
                 catch (NullReferenceException)
                 {
@@ -160,23 +165,20 @@ namespace ManageNetworkPeeringInSameSubscription
             }
         }
 
-        public static void Main(string[] args)
+        public static async Task Main(string[] args)
         {
             try
             {
                 //=================================================================
                 // Authenticate
-                var credentials = SdkContext.AzureCredentialsFactory.FromFile(Environment.GetEnvironmentVariable("AZURE_AUTH_LOCATION"));
+                var clientId = Environment.GetEnvironmentVariable("CLIENT_ID");
+                var clientSecret = Environment.GetEnvironmentVariable("CLIENT_SECRET");
+                var tenantId = Environment.GetEnvironmentVariable("TENANT_ID");
+                var subscription = Environment.GetEnvironmentVariable("SUBSCRIPTION_ID");
+                ClientSecretCredential credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
+                ArmClient client = new ArmClient(credential, subscription);
 
-                var azure = Azure.Configure()
-                    .WithLogLevel(HttpLoggingDelegatingHandler.Level.Basic)
-                    .Authenticate(credentials)
-                    .WithDefaultSubscription();
-
-                // Print selected subscription
-                Utilities.Log("Selected subscription: " + azure.SubscriptionId);
-
-                RunSample(azure);
+                await RunSample(client);
             }
             catch (Exception ex)
             {
