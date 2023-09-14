@@ -9,8 +9,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using Azure.ResourceManager.Compute;
-using Azure.ResourceManager.Compute.Models;
 using System.Xml.Linq;
 
 namespace Azure.ResourceManager.Samples.Common
@@ -59,19 +57,21 @@ namespace Azure.ResourceManager.Samples.Common
 
         public static string CreateUsername() => "tirekicker";
 
-        public static async Task<PublicIPAddressResource> CreatePublicIP(ResourceGroupResource resourceGroup, String pipName)
+        public static async Task PrintVirtualNetwork(VirtualNetworkResource vnet)
         {
-            PublicIPAddressData publicIPInput = new PublicIPAddressData()
+            Log($"====Display peering in {vnet.Data.Name}====");
+            await foreach (var item in vnet.GetVirtualNetworkPeerings().GetAllAsync())
             {
-                Location = resourceGroup.Data.Location,
-                PublicIPAllocationMethod = NetworkIPAllocationMethod.Dynamic,
-                DnsSettings = new PublicIPAddressDnsSettings()
-                {
-                    DomainNameLabel = pipName
-                }
-            };
-            var publicIPLro = await resourceGroup.GetPublicIPAddresses().CreateOrUpdateAsync(WaitUntil.Completed, pipName, publicIPInput);
-            return publicIPLro.Value;
+                Log("Peering name:"+item.Data.Name);
+                Log("PeeringState:" + item.Data.PeeringState);
+                Log("RemoteVirtualNetwork:" + item.Data.RemoteVirtualNetworkId.Name);
+                Log("AllowVirtualNetworkAccess:" + item.Data.AllowVirtualNetworkAccess);
+                Log("AllowForwardedTraffic:" + item.Data.AllowForwardedTraffic);
+                Log("AllowGatewayTransit:" + item.Data.AllowGatewayTransit);
+                Log("UseRemoteGateways:" + item.Data.UseRemoteGateways);
+            }
+            Log("Done");
+            Log();
         }
     }
 }

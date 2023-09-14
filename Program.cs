@@ -10,8 +10,6 @@ using Azure.ResourceManager.Resources;
 using Azure.ResourceManager;
 using Azure.ResourceManager.Network;
 using Azure.ResourceManager.Network.Models;
-using Azure.ResourceManager.Compute;
-using Azure.ResourceManager.Compute.Models;
 using System.Xml.Linq;
 
 namespace ManageNetworkPeeringInSameSubscription
@@ -60,43 +58,65 @@ namespace ManageNetworkPeeringInSameSubscription
          */
         public static async Task RunSample(ArmClient client)
         {
-            string vnetAName = Utilities.CreateRandomName("vnet1-");
-            string vnetBName = Utilities.CreateRandomName("vnet2-");
+            string vnetAName = Utilities.CreateRandomName("vnetA-");
+            string vnetBName = Utilities.CreateRandomName("vnetB-");
             string peeringABName = Utilities.CreateRandomName("peer");
 
             try
             {
+                // Get default subscription
+                SubscriptionResource subscription = await client.GetDefaultSubscriptionAsync();
+
+                // Create a resource group in the EastUS region
+                string rgName = Utilities.CreateRandomName("NetworkSampleRG");
+                Utilities.Log($"Creating resource group...");
+                ArmOperation<ResourceGroupResource> rgLro = await subscription.GetResourceGroups().CreateOrUpdateAsync(WaitUntil.Completed, rgName, new ResourceGroupData(AzureLocation.EastUS));
+                ResourceGroupResource resourceGroup = rgLro.Value;
+                _resourceGroupId = resourceGroup.Id;
+                Utilities.Log("Created a resource group with name: " + resourceGroup.Data.Name);
+
                 //=============================================================
                 // Define two virtual networks to peer
 
                 Utilities.Log("Creating two virtual networks in the same region and subscription...");
 
-                ICreatable<INetwork> networkADefinition = azure.Networks.Define(vnetAName)
-                        .WithRegion(region)
-                        .WithNewResourceGroup(resourceGroupName)
-                        .WithAddressSpace("10.0.0.0/27")
-                        .WithSubnet("subnet1", "10.0.0.0/28")
-                        .WithSubnet("subnet2", "10.0.0.16/28");
-
-                ICreatable<INetwork> networkBDefinition = azure.Networks.Define(vnetBName)
-                        .WithRegion(region)
-                        .WithNewResourceGroup(resourceGroupName)
-                        .WithAddressSpace("10.1.0.0/27")
-                        .WithSubnet("subnet3", "10.1.0.0/27");
-
-                // Create the networks in parallel for better performance
-                var created = azure.Networks.Create(networkADefinition, networkBDefinition);
-
-                // Print virtual network details
-                foreach (INetwork network in created)
+                VirtualNetworkData vnetAInput = new VirtualNetworkData()
                 {
-                    Utilities.PrintVirtualNetwork(network);
-                    Utilities.Log();
-                }
+                    Location = resourceGroup.Data.Location,
+                    AddressPrefixes = { "10.0.0.0/27" },
+                    Subnets =
+                    {
+                        new SubnetData() { Name = "subnet1", AddressPrefix = "10.0.0.0/28" },
+                        new SubnetData() { Name = "subnet2", AddressPrefix = "10.0.0.16/28" },
+                    },
+                };
+                var vnetALro = await resourceGroup.GetVirtualNetworks().CreateOrUpdateAsync(WaitUntil.Completed, vnetAName, vnetAInput);
+                VirtualNetworkResource vnetA = vnetALro.Value;
+                Utilities.Log($"Created a virtual network: {vnetA.Data.Name}");
 
-                // Retrieve the created networks using their definition keys
-                INetwork networkA = created.FirstOrDefault(n => n.Key == networkADefinition.Key);
-                INetwork networkB = created.FirstOrDefault(n => n.Key == networkBDefinition.Key);
+                VirtualNetworkData vnetBInput = new VirtualNetworkData()
+                {
+                    Location = resourceGroup.Data.Location,
+                    AddressPrefixes = { "10.1.0.0/27" },
+                    Subnets =
+                    {
+                        new SubnetData() { Name = "subnet3", AddressPrefix = "10.1.0.0/27" },
+                    },
+                };
+                var vnetBLro = await resourceGroup.GetVirtualNetworks().CreateOrUpdateAsync(WaitUntil.Completed, vnetBName, vnetBInput);
+                VirtualNetworkResource vnetB = vnetBLro.Value;
+                Utilities.Log($"Created a virtual network: {vnetB.Data.Name}");
+
+                //// Print virtual network details
+                //foreach (INetwork network in created)
+                //{
+                //    Utilities.PrintVirtualNetwork(network);
+                //    Utilities.Log();
+                //}
+
+                //// Retrieve the created networks using their definition keys
+                //INetwork vnetA = created.FirstOrDefault(n => n.Key == vnetADefinition.Key);
+                //INetwork vnetB = created.FirstOrDefault(n => n.Key == vnetBDefinition.Key);
 
                 //=============================================================
                 // Peer the two networks using default settings
@@ -107,41 +127,66 @@ namespace ManageNetworkPeeringInSameSubscription
                         + "- Traffic forwarding disabled\n"
                         + "- Gateway use (transit) by the peered network disabled");
 
-                INetworkPeering peeringAB = networkA.Peerings.Define(peeringABName)
-                        .WithRemoteNetwork(networkB)
-                        .Create(); // This implicitly creates a matching peering object on network B as well, if both networks are in the same subscription
+                // Create peering in vnetA side
+                VirtualNetworkPeeringData peeringInput = new VirtualNetworkPeeringData()
+                {
+                    AllowVirtualNetworkAccess = true,
+                    AllowForwardedTraffic = false,
+                    AllowGatewayTransit = false,
+                    UseRemoteGateways = false,
+                    RemoteVirtualNetworkId = vnetB.Data.Id,
+                };
+                var peeringLro = await vnetA.GetVirtualNetworkPeerings().CreateOrUpdateAsync(WaitUntil.Completed, peeringABName, peeringInput);
+                VirtualNetworkPeeringResource peering = peeringLro.Value;
+                Utilities.Log($"Created peering {peering.Data.Name} in vnetA side");
+                Utilities.Log("Peering state: " + peering.Data.PeeringState);
+
+                // Create peering in vnetB side
+                peeringInput = new VirtualNetworkPeeringData()
+                {
+                    AllowVirtualNetworkAccess = true,
+                    AllowForwardedTraffic = false,
+                    AllowGatewayTransit = false,
+                    UseRemoteGateways = false,
+                    RemoteVirtualNetworkId = vnetA.Data.Id,
+                };
+                _ = await vnetB.GetVirtualNetworkPeerings().CreateOrUpdateAsync(WaitUntil.Completed, peeringABName, peeringInput);
+                Utilities.Log($"Created peering {peering.Data.Name} in vnetB side");
 
                 // Print network details showing new peering
                 Utilities.Log("Created a peering");
-                Utilities.PrintVirtualNetwork(networkA);
-                Utilities.PrintVirtualNetwork(networkB);
+                await Utilities.PrintVirtualNetwork(vnetA);
+                await Utilities.PrintVirtualNetwork(vnetB);
 
                 //=============================================================
                 // Update a the peering disallowing access from B to A but allowing traffic forwarding from B to A
 
                 Utilities.Log("Updating the peering ...");
-                peeringAB.Update()
-                    .WithoutAccessFromEitherNetwork()
-                    .WithTrafficForwardingFromRemoteNetwork()
-                    .Apply();
+
+                VirtualNetworkPeeringData updatePeeringInput = peering.Data;
+                updatePeeringInput.AllowVirtualNetworkAccess = false;
+                updatePeeringInput.AllowForwardedTraffic = true;
+                peeringLro = await vnetA.GetVirtualNetworkPeerings().CreateOrUpdateAsync(WaitUntil.Completed, peeringABName, updatePeeringInput);
+                peering = peeringLro.Value;
 
                 Utilities.Log("Updated the peering to disallow network access between B and A but allow traffic forwarding from B to A.");
 
                 //=============================================================
                 // Show the new network information
 
-                Utilities.PrintVirtualNetwork(networkA);
-                Utilities.PrintVirtualNetwork(networkB);
+                await Utilities.PrintVirtualNetwork(vnetA);
+                await Utilities.PrintVirtualNetwork(vnetB);
 
                 //=============================================================
                 // Remove the peering
 
                 Utilities.Log("Deleting the peering from the networks...");
-                networkA.Peerings.DeleteById(peeringAB.Id); // This deletes the peering from both networks, if they're in the same subscription
-                Utilities.Log("Deleted the peering from both sides.");
+                await peering.DeleteAsync(WaitUntil.Completed);
 
-                Utilities.PrintVirtualNetwork(networkA);
-                Utilities.PrintVirtualNetwork(networkB);
+                // This deletes the peering from both networks, if they're in the same subscription
+                Utilities.Log("Deleted the peering from both sides.");
+                await Utilities.PrintVirtualNetwork(vnetA);
+                await Utilities.PrintVirtualNetwork(vnetB);
             }
             finally
             {
